@@ -1,6 +1,8 @@
- BiteStream — Food Delivery & Real-Time Logistics
+# BiteStream — Food Delivery & Real-Time Logistics
 
 A database implementation for the BiteStream food-delivery and real-time logistics use case, using **PostgreSQL** for transactional/relational workloads and **MongoDB** for flexible reviews, menus, and geospatial driver telemetry.
+
+---
 
 ## Repository
 
@@ -12,7 +14,7 @@ GitHub: https://github.com/sreelasyamuvva/team10_a1
 
 ---
 
-## 1. Project Structure
+# 1. Project Structure
 
 ```text
 .
@@ -29,7 +31,6 @@ GitHub: https://github.com/sreelasyamuvva/team10_a1
 │   └── 03_workflow4_facet.js
 ├── performance/
 │   ├── postgres_explain_analyzes.txt
-│   ├── 1postgres_explain_analyzes.txt
 │   └── mongo_execution_stats.json
 └── sql/
     ├── 01_schema_ddl.sql
@@ -39,8 +40,6 @@ GitHub: https://github.com/sreelasyamuvva/team10_a1
     ├── 05_materialized_views.sql
     └── 06_window_analytics.sql
 ```
-
-> `performance/1postgres_explain_analyzes.txt` is an older duplicate/legacy analysis file. The intended submission file is `performance/postgres_explain_analyzes.txt`; remove the duplicate before the final submission if it is still present.
 
 ---
 
@@ -71,6 +70,8 @@ Schema definition:
 sql/01_schema_ddl.sql
 ```
 
+---
+
 ## 2.2 Indexes
 
 The assignment requires prevention of multiple simultaneously active orders for the same user. This is enforced with a **partial unique index**:
@@ -87,6 +88,8 @@ Additional supporting indexes are defined in:
 sql/02_indexes.sql
 ```
 
+---
+
 ## 2.3 Wallet Audit Trigger
 
 ```text
@@ -99,6 +102,8 @@ The trigger records wallet-balance changes in `wallet_audit_logs`. The logged am
 - balance increases → `CREDIT`
 
 The audit row also records the affected user, resulting balance, and timestamp.
+
+---
 
 ## 2.4 Workflow 1 — Atomic Checkout
 
@@ -134,6 +139,8 @@ CALL sp_execute_checkout(
 
 Because the procedure contains transaction control, call it as a **top-level `CALL`**, not from inside an already-open explicit transaction block.
 
+---
+
 ## 2.5 Materialized View
 
 ```text
@@ -159,6 +166,8 @@ A helper procedure is also provided:
 ```text
 refresh_restaurant_completed_revenue()
 ```
+
+---
 
 ## 2.6 Workflow 2 — SQL Window Analytics
 
@@ -198,6 +207,8 @@ Schema documentation:
 docs/mongo_schema_map.json
 ```
 
+---
+
 ## 3.2 Indexes and Collection Setup
 
 Run:
@@ -211,6 +222,8 @@ The script creates:
 - `DriverPings.location` as a `2dsphere` index;
 - a TTL index on `DriverPings.created_at` with `expireAfterSeconds: 7200`;
 - the compound `Reviews` index on `rating` and `sentiment_tags`.
+
+---
 
 ## 3.3 Workflow 3 — Nearest Active Driver
 
@@ -227,6 +240,8 @@ The workflow uses `$geoNear` to find the nearest **active driver within 5 km** o
 ```
 
 The query is supported by the `location_2dsphere` index.
+
+---
 
 ## 3.4 Workflow 4 — Review Analytics with `$facet`
 
@@ -292,6 +307,8 @@ The PostgreSQL dataset alone exceeds the required 100k-row scale because the aud
 
 The order generator also tracks users with active orders so that the partial unique active-order constraint is respected by generated data.
 
+---
+
 ## 4.2 MongoDB Seeder
 
 Run:
@@ -338,6 +355,8 @@ EXPLAIN (ANALYZE, BUFFERS)
 
 Such a plan must be interpreted as **forced index usage**, not as proof that PostgreSQL's cost-based optimizer would naturally select that index when sequential scanning is cheaper.
 
+---
+
 ## 5.2 MongoDB
 
 Raw MongoDB execution evidence is stored in:
@@ -346,29 +365,45 @@ Raw MongoDB execution evidence is stored in:
 performance/mongo_execution_stats.json
 ```
 
-The evidence records:
+The recorded execution plans demonstrate index usage and do not contain a collection-level `COLLSCAN`.
 
-### Workflow 3
+### Workflow 3 — Nearest Active Driver
 
-The recorded plan uses:
+The recorded `$geoNear` plan uses the required:
 
 ```text
 GEO_NEAR_2DSPHERE
 location_2dsphere
 ```
 
-and records execution statistics such as keys examined, documents examined, and execution time.
+Execution statistics:
 
-### Workflow 4
+- Execution time: **6 ms**
+- Keys examined: **113**
+- Documents examined: **137**
+- Execution successful: **true**
+- No `COLLSCAN` observed
 
-The recorded plan contains:
+The query searches for active drivers within 5 km and returns the nearest driver.
+
+### Workflow 4 — Multi-Faceted Review Analytics
+
+The recorded plan uses:
 
 ```text
 IXSCAN
 rating_1_sentiment_tags_1
 ```
 
-and does not rely on a collection-level `COLLSCAN`.
+Execution statistics:
+
+- Execution time: **43 ms**
+- Keys examined: **19,947**
+- Documents examined: **10,000**
+- Execution successful: **true**
+- No `COLLSCAN` observed
+
+The `$facet` pipeline computes the rating distribution, most frequent sentiment tags, and overall average rating.
 
 ---
 
@@ -393,6 +428,8 @@ Then populate the database:
 cd data_generation
 python3 postgres_seeder.py
 ```
+
+---
 
 ## MongoDB
 
