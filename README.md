@@ -12,8 +12,6 @@ GitHub: https://github.com/sreelasyamuvva/team10_a1
 
 > The hash above is the latest repository commit known before the final README update. After the README is committed, use the resulting commit hash as the final submission hash required by the submission portal. A commit cannot contain its own final hash because changing the README changes the commit hash.
 
----
-
 # 1. Project Structure
 
 ```text
@@ -343,9 +341,99 @@ Raw PostgreSQL execution evidence is stored in:
 performance/postgres_explain_analyzes.txt
 ```
 
-The analysis covers `EXPLAIN (ANALYZE, BUFFERS)` for the SQL workload and checks index usage, rows examined, and execution time.
+The following is the actual raw `EXPLAIN (ANALYZE, BUFFERS)` output captured for
+Workflow 2 (`sql/06_window_analytics.sql`) on the seeded PostgreSQL dataset.
 
-For index-usage verification, a comparison plan may be generated with:
+### Workflow 2 — Raw `EXPLAIN (ANALYZE, BUFFERS)`
+
+```text
+Sort  (cost=136113.92..136120.17 rows=2500 width=76) (actual time=87.820..87.838 rows=500 loops=1)
+  Sort Key: (dense_rank() OVER (?)), latest_metrics.restaurant_name
+  Sort Method: quicksort  Memory: 68kB
+  Buffers: shared hit=2015
+  ->  WindowAgg  (cost=135929.07..135972.82 rows=2500 width=76) (actual time=87.523..87.716 rows=500 loops=1)
+        Buffers: shared hit=2009
+        ->  Sort  (cost=135929.07..135935.32 rows=2500 width=68) (actual time=87.503..87.534 rows=500 loops=1)
+              Sort Key: latest_metrics.moving_average_7_day DESC
+              Sort Method: quicksort  Memory: 65kB
+              Buffers: shared hit=2009
+              ->  Subquery Scan on latest_metrics  (cost=74585.01..135787.97 rows=2500 width=68) (actual time=53.719..87.322 rows=500 loops=1)
+                    Filter: (latest_metrics.latest_row = 1)
+                    Buffers: shared hit=2006
+                    ->  WindowAgg  (cost=74585.01..129537.97 rows=500000 width=76) (actual time=53.716..87.273 rows=500 loops=1)
+                          Run Condition: (row_number() OVER (?) <= 1)
+                          Buffers: shared hit=2006
+                          ->  Incremental Sort  (cost=74585.01..120787.97 rows=500000 width=68) (actual time=53.709..86.451 rows=15500 loops=1)
+                                Sort Key: moving_average.restaurant_id, moving_average.order_date DESC
+                                Presorted Key: moving_average.restaurant_id
+                                Full-sort Groups: 250  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
+                                Buffers: shared hit=2006
+                                ->  Subquery Scan on moving_average  (cost=74584.96..98287.97 rows=500000 width=68) (actual time=53.554..81.931 rows=15500 loops=1)
+                                      Buffers: shared hit=2006
+                                      ->  WindowAgg  (cost=74584.96..98287.97 rows=500000 width=68) (actual time=53.552..80.981 rows=15500 loops=1)
+                                            Buffers: shared hit=2006
+                                            InitPlan 1 (returns $0)
+                                              ->  Aggregate  (cost=1417.00..1417.01 rows=1 width=4) (actual time=6.993..6.994 rows=1 loops=1)
+                                                    Buffers: shared hit=667
+                                                    ->  Seq Scan on orders  (cost=0.00..1167.00 rows=50000 width=8) (actual time=0.017..2.182 rows=50000 loops=1)
+                                                          Buffers: shared hit=667
+                                            InitPlan 2 (returns $1)
+                                              ->  Aggregate  (cost=1417.00..1417.01 rows=1 width=4) (actual time=6.687..6.687 rows=1 loops=1)
+                                                    Buffers: shared hit=667
+                                                    ->  Seq Scan on orders orders_1  (cost=0.00..1167.00 rows=50000 width=8) (actual time=0.004..2.008 rows=50000 loops=1)
+                                                          Buffers: shared hit=667
+                                            ->  Merge Left Join  (cost=71750.94..81703.95 rows=500000 width=68) (actual time=38.038..52.747 rows=15500 loops=1)
+                                                  Merge Cond: ((r.id = o.restaurant_id) AND (((calendar_day.calendar_day)::date) = ((o.created_at)::date)))
+                                                  Buffers: shared hit=2006
+                                                  ->  Sort  (cost=67274.68..68524.68 rows=500000 width=40) (actual time=21.798..22.994 rows=15500 loops=1)
+                                                        Sort Key: r.id, ((calendar_day.calendar_day)::date)
+                                                        Sort Method: quicksort  Memory: 1521kB
+                                                        Buffers: shared hit=1339
+                                                        ->  Nested Loop  (cost=0.01..6271.26 rows=500000 width=40) (actual time=13.732..15.743 rows=15500 loops=1)
+                                                              Buffers: shared hit=1339
+                                                              ->  Function Scan on generate_series calendar_day  (cost=0.01..10.01 rows=1000 width=8) (actual time=13.715..13.718 rows=31 loops=1)
+                                                                    Buffers: shared hit=1334
+                                                              ->  Materialize  (cost=0.00..12.50 rows=500 width=32) (actual time=0.000..0.016 rows=500 loops=31)
+                                                                    Buffers: shared hit=5
+                                                                    ->  Seq Scan on restaurants r  (cost=0.00..10.00 rows=500 width=32) (actual time=0.011..0.047 rows=500 loops=1)
+                                                                          Buffers: shared hit=5
+                                                  ->  GroupAggregate  (cost=4476.26..5479.34 rows=39999 width=52) (actual time=16.220..26.354 rows=14158 loops=1)
+                                                        Group Key: o.restaurant_id, ((o.created_at)::date)
+                                                        Buffers: shared hit=667
+                                                        ->  Sort  (cost=4476.26..4577.03 rows=40310 width=26) (actual time=16.193..18.298 rows=40320 loops=1)
+                                                              Sort Key: o.restaurant_id, ((o.created_at)::date)
+                                                              Sort Method: quicksort  Memory: 3434kB
+                                                              Buffers: shared hit=667
+                                                              ->  Seq Scan on orders o  (cost=0.00..1392.78 rows=40310 width=26) (actual time=0.009..5.779 rows=40320 loops=1)
+                                                                    Filter: ((status)::text = 'DELIVERED'::text)
+                                                                    Rows Removed by Filter: 9680
+                                                                    Buffers: shared hit=667
+Planning:
+  Buffers: shared hit=281
+Planning Time: 0.832 ms
+JIT:
+  Functions: 49
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 1.261 ms, Inlining 0.000 ms, Optimization 0.651 ms, Emission 14.917 ms, Total 16.829 ms
+Execution Time: 100.256 ms
+```
+
+### Observed execution
+
+- Planning Time: **0.832 ms**
+- Execution Time: **100.256 ms**
+- Shared buffer hits: **2,015**
+- Total orders scanned: **50,000**
+- Delivered orders processed: **40,320**
+- Rows removed by the `DELIVERED` filter: **9,680**
+- Final output rows: **500**
+- Main operators include `GroupAggregate`, `Incremental Sort`, and `WindowAgg`.
+
+The natural cost-based plan uses sequential scans on `orders`. This is not
+treated as an error: the workflow processes a large fraction of the 50,000-row
+table, so PostgreSQL can reasonably prefer sequential access over an index scan.
+
+For additional index-usage experimentation, a forced plan can be generated with:
 
 ```sql
 SET enable_seqscan = OFF;
@@ -353,9 +441,8 @@ EXPLAIN (ANALYZE, BUFFERS)
 ...
 ```
 
-Such a plan must be interpreted as **forced index usage**, not as proof that PostgreSQL's cost-based optimizer would naturally select that index when sequential scanning is cheaper.
-
----
+Any such plan must be described as **forced index usage**, not as proof that the
+normal optimizer would choose the index.
 
 ## 5.2 MongoDB
 
@@ -365,45 +452,488 @@ Raw MongoDB execution evidence is stored in:
 performance/mongo_execution_stats.json
 ```
 
-The recorded execution plans demonstrate index usage and do not contain a collection-level `COLLSCAN`.
+The file contains the raw `explain("executionStats")` output for Workflows 3
+and 4. The stored statistics below are the execution evidence currently present
+in the JSON file.
 
 ### Workflow 3 — Nearest Active Driver
 
-The recorded `$geoNear` plan uses the required:
+The raw execution plan uses:
 
 ```text
 GEO_NEAR_2DSPHERE
 location_2dsphere
 ```
 
-Execution statistics:
+Observed execution statistics:
 
-- Execution time: **6 ms**
-- Keys examined: **113**
-- Documents examined: **137**
 - Execution successful: **true**
-- No `COLLSCAN` observed
+- Execution time: **6 ms**
+- Total keys examined: **113**
+- Total documents examined: **137**
+- No `COLLSCAN` appears in the stored plan.
 
-The query searches for active drivers within 5 km and returns the nearest driver.
+The underlying execution stages also show an `IXSCAN` using
+`location_2dsphere`.
+
+#### Raw `explain("executionStats")`
+
+```json
+{
+  "explainVersion": "1",
+  "stages": [
+    {
+      "$geoNearCursor": {
+        "queryPlanner": {
+          "namespace": "BiteStream.DriverPings",
+          "parsedQuery": {
+            "$and": [
+              {
+                "active": {
+                  "$eq": true
+                }
+              },
+              {
+                "location": {
+                  "$nearSphere": {
+                    "type": "Point",
+                    "coordinates": [
+                      78.4071,
+                      17.4483
+                    ]
+                  },
+                  "$maxDistance": 5000
+                }
+              }
+            ]
+          },
+          "winningPlan": {
+            "isCached": false,
+            "stage": "FETCH",
+            "filter": {
+              "active": {
+                "$eq": true
+              }
+            },
+            "nss": "BiteStream.DriverPings",
+            "inputStage": {
+              "stage": "GEO_NEAR_2DSPHERE",
+              "nss": "BiteStream.DriverPings",
+              "keyPattern": {
+                "location": "2dsphere"
+              },
+              "indexName": "location_2dsphere",
+              "indexVersion": 2
+            }
+          }
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 32,
+          "executionTimeMillis": 6,
+          "totalKeysExamined": 113,
+          "totalDocsExamined": 137,
+          "executionStages": {
+            "isCached": false,
+            "stage": "FETCH",
+            "filter": {
+              "active": {
+                "$eq": true
+              }
+            },
+            "nReturned": 32,
+            "docsExamined": 48,
+            "alreadyHasObj": 48,
+            "nss": "BiteStream.DriverPings",
+            "inputStage": {
+              "stage": "GEO_NEAR_2DSPHERE",
+              "nReturned": 48,
+              "keyPattern": {
+                "location": "2dsphere"
+              },
+              "indexName": "location_2dsphere",
+              "searchIntervals": [
+                {
+                  "minDistance": 0,
+                  "maxDistance": 106.51029047956722,
+                  "maxInclusive": false,
+                  "nBuffered": 89,
+                  "nReturned": 48
+                }
+              ],
+              "usedDisk": false,
+              "inputStage": {
+                "stage": "FETCH",
+                "nReturned": 89,
+                "docsExamined": 89,
+                "alreadyHasObj": 0,
+                "inputStage": {
+                  "stage": "IXSCAN",
+                  "nReturned": 89,
+                  "keyPattern": {
+                    "location": "2dsphere"
+                  },
+                  "indexName": "location_2dsphere",
+                  "isMultiKey": false,
+                  "isUnique": false,
+                  "isSparse": false,
+                  "isPartial": false,
+                  "indexVersion": 2,
+                  "direction": "forward",
+                  "keysExamined": 113,
+                  "seeks": 25,
+                  "dupsTested": 0,
+                  "dupsDropped": 0,
+                  "peakTrackedMemBytes": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "nReturned": 1,
+      "executionTimeMillisEstimate": 4
+    },
+    {
+      "$limit": 1,
+      "nReturned": 1,
+      "executionTimeMillisEstimate": 4
+    }
+  ],
+  "serverInfo": {
+    "host": "sanjays-MacBook-Air.local",
+    "port": 27017,
+    "version": "8.3.7"
+  },
+  "command": {
+    "aggregate": "DriverPings",
+    "pipeline": [
+      {
+        "$geoNear": {
+          "near": {
+            "type": "Point",
+            "coordinates": [
+              78.4071,
+              17.4483
+            ]
+          },
+          "distanceField": "distance",
+          "maxDistance": 5000,
+          "spherical": true,
+          "query": {
+            "active": true
+          }
+        }
+      },
+      {
+        "$limit": 1
+      }
+    ],
+    "cursor": {},
+    "$db": "BiteStream"
+  },
+  "ok": 1
+}
+```
 
 ### Workflow 4 — Multi-Faceted Review Analytics
 
-The recorded plan uses:
+The raw execution plan uses:
 
 ```text
 IXSCAN
 rating_1_sentiment_tags_1
 ```
 
-Execution statistics:
+Observed execution statistics:
 
-- Execution time: **43 ms**
-- Keys examined: **19,947**
-- Documents examined: **10,000**
 - Execution successful: **true**
-- No `COLLSCAN` observed
+- Execution time: **43 ms**
+- Total keys examined: **19,947**
+- Total documents examined: **10,000**
+- No `COLLSCAN` appears in the stored plan.
 
-The `$facet` pipeline computes the rating distribution, most frequent sentiment tags, and overall average rating.
+The `Reviews` index is multikey because `sentiment_tags` is an array, so the
+query still fetches documents after the index scan.
+
+#### Raw `explain("executionStats")`
+
+```json
+{
+  "explainVersion": "1",
+  "stages": [
+    {
+      "$cursor": {
+        "queryPlanner": {
+          "namespace": "BiteStream.Reviews",
+          "parsedQuery": {},
+          "winningPlan": {
+            "isCached": false,
+            "stage": "PROJECTION_SIMPLE",
+            "transformBy": {
+              "rating": true,
+              "sentiment_tags": true,
+              "_id": false
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "nss": "BiteStream.Reviews",
+              "inputStage": {
+                "stage": "IXSCAN",
+                "nss": "BiteStream.Reviews",
+                "keyPattern": {
+                  "rating": 1,
+                  "sentiment_tags": 1
+                },
+                "indexName": "rating_1_sentiment_tags_1",
+                "isMultiKey": true,
+                "multiKeyPaths": {
+                  "rating": [],
+                  "sentiment_tags": [
+                    "sentiment_tags"
+                  ]
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "rating": [
+                    "[MinKey, MaxKey]"
+                  ],
+                  "sentiment_tags": [
+                    "[MinKey, MaxKey]"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 10000,
+          "executionTimeMillis": 43,
+          "totalKeysExamined": 19947,
+          "totalDocsExamined": 10000,
+          "executionStages": {
+            "isCached": false,
+            "stage": "PROJECTION_SIMPLE",
+            "nReturned": 10000,
+            "executionTimeMillisEstimate": 6,
+            "works": 19948,
+            "advanced": 10000,
+            "needTime": 9947,
+            "isEOF": 1,
+            "transformBy": {
+              "rating": true,
+              "sentiment_tags": true,
+              "_id": false
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "nReturned": 10000,
+              "docsExamined": 10000,
+              "alreadyHasObj": 0,
+              "nss": "BiteStream.Reviews",
+              "inputStage": {
+                "stage": "IXSCAN",
+                "nReturned": 10000,
+                "keyPattern": {
+                  "rating": 1,
+                  "sentiment_tags": 1
+                },
+                "indexName": "rating_1_sentiment_tags_1",
+                "isMultiKey": true,
+                "keysExamined": 19947,
+                "seeks": 1,
+                "dupsTested": 19947,
+                "dupsDropped": 9947,
+                "peakTrackedMemBytes": 96382
+              }
+            }
+          }
+        }
+      },
+      "nReturned": 10000,
+      "executionTimeMillisEstimate": 24
+    },
+    {
+      "$facet": {
+        "rating_distribution": [
+          {
+            "$internalFacetTeeConsumer": {},
+            "nReturned": 10000,
+            "executionTimeMillisEstimate": 24
+          },
+          {
+            "$group": {
+              "_id": "$rating",
+              "count": {
+                "$sum": {
+                  "$const": 1
+                }
+              }
+            },
+            "nReturned": 5,
+            "executionTimeMillisEstimate": 24,
+            "usedDisk": false
+          },
+          {
+            "$sort": {
+              "sortKey": {
+                "_id": 1
+              }
+            },
+            "nReturned": 5,
+            "executionTimeMillisEstimate": 42,
+            "usedDisk": false
+          }
+        ],
+        "most_frequent_tags": [
+          {
+            "$internalFacetTeeConsumer": {},
+            "nReturned": 10000,
+            "executionTimeMillisEstimate": 0
+          },
+          {
+            "$unwind": {
+              "path": "$sentiment_tags"
+            },
+            "nReturned": 19947,
+            "executionTimeMillisEstimate": 0
+          },
+          {
+            "$group": {
+              "_id": "$sentiment_tags",
+              "count": {
+                "$sum": {
+                  "$const": 1
+                }
+              }
+            },
+            "nReturned": 8,
+            "executionTimeMillisEstimate": 0,
+            "usedDisk": false
+          },
+          {
+            "$sort": {
+              "sortKey": {
+                "count": -1,
+                "_id": 1
+              },
+              "limit": 10
+            },
+            "nReturned": 8,
+            "executionTimeMillisEstimate": 0,
+            "usedDisk": false
+          }
+        ],
+        "overall_average_rating": [
+          {
+            "$internalFacetTeeConsumer": {},
+            "nReturned": 10000,
+            "executionTimeMillisEstimate": 0
+          },
+          {
+            "$group": {
+              "_id": {
+                "$const": null
+              },
+              "average_rating": {
+                "$avg": "$rating"
+              }
+            },
+            "nReturned": 1,
+            "executionTimeMillisEstimate": 0,
+            "usedDisk": false
+          }
+        ]
+      },
+      "nReturned": 1,
+      "executionTimeMillisEstimate": 42
+    }
+  ],
+  "peakTrackedMemBytes": 96382,
+  "serverInfo": {
+    "host": "sanjays-MacBook-Air.local",
+    "port": 27017,
+    "version": "8.3.7"
+  },
+  "command": {
+    "aggregate": "Reviews",
+    "pipeline": [
+      {
+        "$project": {
+          "_id": 0,
+          "rating": 1,
+          "sentiment_tags": 1
+        }
+      },
+      {
+        "$facet": {
+          "rating_distribution": [
+            {
+              "$group": {
+                "_id": "$rating",
+                "count": {
+                  "$sum": 1
+                }
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ],
+          "most_frequent_tags": [
+            {
+              "$unwind": "$sentiment_tags"
+            },
+            {
+              "$group": {
+                "_id": "$sentiment_tags",
+                "count": {
+                  "$sum": 1
+                }
+              }
+            },
+            {
+              "$sort": {
+                "count": -1,
+                "_id": 1
+              }
+            },
+            {
+              "$limit": 10
+            }
+          ],
+          "overall_average_rating": [
+            {
+              "$group": {
+                "_id": null,
+                "average_rating": {
+                  "$avg": "$rating"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "cursor": {},
+    "$db": "BiteStream"
+  },
+  "ok": 1
+}
+```
+
+> **Dataset note:** The stored Workflow 4 execution statistics show 10,000
+> documents examined. They should therefore be treated as the captured
+> performance evidence in `performance/mongo_execution_stats.json`, not as a
+> claim about a newer 50,000-review run. Regenerate the file if fresh
+> 50,000-review performance measurements are required.
 
 ---
 
