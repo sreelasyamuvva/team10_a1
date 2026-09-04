@@ -366,17 +366,13 @@
         "aggregate": "Reviews",
         "pipeline": [
           {
-            "$sort": {
-              "rating": 1
-            }
-          },
-          {
-            "$project": {
-              "_id": 0,
-              "rating": 1,
-              "sentiment_tags": 1
-            }
-          },
+  "$project": {
+    "_id": 0,
+    "rating": 1,
+    "sentiment_tags": 1
+  }
+},
+         
           {
             "$facet": {
               "rating_distribution": [
