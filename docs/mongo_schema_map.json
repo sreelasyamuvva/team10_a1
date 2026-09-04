@@ -1,0 +1,149 @@
+
+{
+  "Menus": {
+    "description": "Flexible restaurant menu catalog with nested categories, items, and customization add-ons",
+    "fields": {
+      "restaurant_id": {
+        "type": "Integer",
+        "required": true
+      },
+      "restaurant_name": {
+        "type": "String",
+        "required": true
+      },
+      "categories": {
+        "type": "Array",
+        "required": true,
+        "item_shape": {
+          "name": {
+            "type": "String",
+            "required": true
+          },
+          "items": {
+            "type": "Array",
+            "required": true,
+            "item_shape": {
+              "name": {
+                "type": "String",
+                "required": true
+              },
+              "price": {
+                "type": "Number",
+                "required": true,
+                "constraint": ">= 0"
+              },
+              "customization_addons": {
+                "type": "Array",
+                "required": false,
+                "item_shape": {
+                  "name": {
+                    "type": "String",
+                    "required": true
+                  },
+                  "price": {
+                    "type": "Number",
+                    "required": true,
+                    "constraint": ">= 0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "updated_at": {
+        "type": "Date",
+        "required": true
+      }
+    },
+    "indexes": [
+      "_id_"
+    ]
+  },
+
+  "Reviews": {
+    "description": "Structured restaurant review documents with ratings, sentiment tags, and timestamps",
+    "fields": {
+      "restaurant_id": {
+        "type": "Integer",
+        "required": true
+      },
+      "user_id": {
+        "type": "Integer",
+        "required": true
+      },
+      "rating": {
+        "type": "Integer",
+        "required": true,
+        "constraint": "1 <= rating <= 5"
+      },
+      "sentiment_tags": {
+        "type": "Array<String>",
+        "required": true
+      },
+      "comment": {
+        "type": "String",
+        "required": false
+      },
+      "created_at": {
+        "type": "Date",
+        "required": true
+      }
+    },
+    "indexes": [
+      "_id_"
+    ]
+  },
+
+  "DriverPings": {
+    "description": "Real-time driver geospatial telemetry logs in GeoJSON Point format",
+    "fields": {
+      "driver_id": {
+        "type": "Integer",
+        "required": true
+      },
+      "active": {
+        "type": "Boolean",
+        "required": true
+      },
+      "location": {
+        "type": "GeoJSON Point",
+        "required": true,
+        "shape": {
+          "type": {
+            "type": "String",
+            "constraint": "must equal 'Point'"
+          },
+          "coordinates": {
+            "type": "Array<Number>",
+            "constraint": "[longitude, latitude]"
+          }
+        }
+      },
+      "created_at": {
+        "type": "Date",
+        "required": true
+      }
+    },
+    "indexes": [
+      "_id_",
+      {
+        "name": "location_2dsphere",
+        "keys": {
+          "location": "2dsphere"
+        },
+        "purpose": "Required by the assignment. Supports Workflow 3 $geoNear proximity queries."
+      },
+      {
+        "name": "created_at_1",
+        "keys": {
+          "created_at": 1
+        },
+        "options": {
+          "expireAfterSeconds": 7200
+        },
+        "purpose": "Required by the assignment. Automatically expires DriverPings older than 2 hours."
+      }
+    ]
+  }
+}
