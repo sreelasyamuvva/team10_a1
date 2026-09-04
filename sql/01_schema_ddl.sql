@@ -11,7 +11,7 @@ CREATE TABLE users (
     wallet_balance DECIMAL(10,2) NOT NULL,
 
     CONSTRAINT chk_wallet_balance
-        CHECK (wallet_balance > 0)
+        CHECK (wallet_balance >= 0.00)
 );
 
 -- Table 2 is RESTAURANTS (contains Restaurant information/location)
