@@ -1,0 +1,79 @@
+BiteStream - Workflow 2 PostgreSQL EXPLAIN ANALYZE Analysis
+
+Query: sql/06_window_analytics.sql
+Dataset: 50,000 orders, 10,000 users, 500 restaurants
+Delivered orders: 40,320
+
+1. Overall Execution
+
+The query completed successfully with an execution time of approximately 106 ms.
+
+Execution Time: 105.954 ms
+Planning Time: 0.920 ms
+Shared Buffers Hit: 2,015
+
+The query uses multiple window functions, sorting, aggregation, and joins to calculate the 7-day moving average for restaurants and then rank restaurants based on their latest moving average.
+
+2. Main Steps in the Query Plan
+
+The query first scans the orders table to identify delivered orders. Out of the 50,000 orders, 40,320 orders had the status 'DELIVERED', while 9,680 orders were filtered out.
+
+The delivered orders are then grouped by restaurant and order date using a GroupAggregate. This produced 14,220 restaurant-date combinations.
+
+After that, the query creates a calendar of dates and combines it with the 500 restaurants. This is used to make sure that dates with no orders are also included in the moving-average calculation.
+
+The data is then processed using a WindowAgg operation. The window is partitioned by restaurant and ordered by date, with the previous 6 rows included along with the current row. This is used to calculate the 7-day moving average.
+
+An Incremental Sort is then used to arrange the data by restaurant and order date. PostgreSQL was already able to use the restaurant_id ordering, so it only needed to sort the remaining data within each restaurant group.
+
+Another WindowAgg operation applies ROW_NUMBER() to identify the latest row for each restaurant. The run condition limits this to the first row for each restaurant, reducing the number of rows passed to the next stage.
+
+Finally, the latest result for each restaurant is sorted by the 7-day moving average and ranked using DENSE_RANK(). The final output contains 500 rows, one for each restaurant.
+
+3. Important Observations
+
+* The query processes 50,000 total orders, of which 40,320 are delivered orders.
+* The initial filtering removes 9,680 non-delivered orders.
+* 14,220 restaurant-date combinations are generated from the delivered orders.
+* The final result contains 500 rows, matching the number of restaurants.
+* PostgreSQL uses Incremental Sort instead of performing a completely new sort for the entire dataset.
+* The window functions are handled using WindowAgg operations.
+* The largest estimated intermediate result is around 500,000 rows, although only 15,500 rows were actually processed at that stage because of the generated calendar range and filtering.
+* The sorting operations use quicksort and require relatively small amounts of memory (around 60–1400 kB depending on the stage).
+* The query mainly uses shared buffer hits, with no significant disk reads shown in the plan.
+
+4. Performance Analysis
+
+The total execution time of about 106 ms is reasonably low for this workflow and dataset size.
+
+The main amount of work happens before the final ranking. In particular, the calendar generation, aggregation of delivered orders, sorting, and moving-average window calculation account for most of the execution time.
+
+The two full sequential scans of the orders table in the InitPlans each take around 7–8 ms. The delivered-order scan takes about 7 ms and reads all 50,000 rows before filtering the non-delivered orders.
+
+The moving-average calculation and sorting stages together form the main part of the query execution. The Incremental Sort is useful here because the data is already partially ordered by restaurant_id.
+
+5. Possible Improvements
+
+Although the current execution time is good, the query could potentially be improved for a larger dataset.
+
+First, an index on the order status column could help reduce the amount of data scanned when filtering for DELIVERED orders. For example:
+
+CREATE INDEX idx_orders_status
+ON orders(status);
+
+An index involving restaurant_id and created_at could also help with grouping and ordering operations:
+
+CREATE INDEX idx_orders_restaurant_date
+ON orders(restaurant_id, created_at);
+
+However, whether these indexes actually improve performance should be verified using EXPLAIN ANALYZE after creating them. For a table of only 50,000 rows, PostgreSQL may still prefer sequential scans because they can be faster than using an index.
+
+The query also generates restaurant-date combinations using the calendar and restaurant tables. For a much larger date range, this can increase the number of intermediate rows significantly. Limiting the calendar range to only the required analysis period can help keep this part of the query smaller.
+
+6. Conclusion
+
+The EXPLAIN ANALYZE output shows that the Workflow 2 query is performing well on the current dataset. It successfully processes 50,000 orders and produces the latest 7-day moving average and ranking for all 500 restaurants in about 106 ms.
+
+The main operations involved are sequential scanning of orders, aggregation by restaurant and date, calendar generation, sorting, and window functions. PostgreSQL's Incremental Sort and WindowAgg operations help handle the moving-average and latest-row calculations efficiently.
+
+For the current dataset, the performance is acceptable. If the system grows to a much larger number of orders, indexing restaurant/date and filtering columns, along with reducing unnecessary date ranges, would be worth testing.
