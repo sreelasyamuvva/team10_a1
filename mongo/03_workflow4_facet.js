@@ -3,11 +3,6 @@ db = db.getSiblingDB("BiteStream")
 
 db.Reviews.aggregate([
   {
-    $sort: {
-      rating: 1
-    }
-  },
-  {
     $project: {
       _id: 0,
       rating: 1,

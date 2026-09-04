@@ -1,5 +1,8 @@
 -- Atomic checkout procedure
-CREATE OR REPLACE PROCEDURE checkout_order(
+DROP PROCEDURE IF EXISTS checkout_order(UUID, UUID, DECIMAL);
+DROP PROCEDURE IF EXISTS sp_execute_checkout(UUID, UUID, DECIMAL);
+
+CREATE OR REPLACE PROCEDURE sp_execute_checkout(
     p_user_id UUID,
     p_restaurant_id UUID,
     p_total_amount DECIMAL(10,2)
@@ -7,45 +10,66 @@ CREATE OR REPLACE PROCEDURE checkout_order(
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    current_balance DECIMAL(10,2);
+    rollback_required BOOLEAN := FALSE;
+    constraint_name TEXT;
 BEGIN
-    -- Read the wallet balance and lock this user's row
-    -- so another checkout cannot change it at the same time.
-    SELECT wallet_balance
-    INTO current_balance
-    FROM users
-    WHERE id = p_user_id
-    FOR UPDATE;
+    -- Use REPEATABLE READ for the checkout transaction
+    SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 
-    -- Make sure the user exists.
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'User does not exist';
-    END IF;
+    BEGIN
+        -- Lock the user row so concurrent checkouts cannot modify
+        -- the same wallet simultaneously.
+        PERFORM 1
+        FROM users
+        WHERE id = p_user_id
+        FOR UPDATE;
 
-    -- Check whether the user has enough money.
-    IF current_balance < p_total_amount THEN
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'User does not exist';
+        END IF;
+
+        -- The chk_wallet_balance constraint will reject
+        -- an insufficient balance.
+        UPDATE users
+        SET wallet_balance = wallet_balance - p_total_amount
+        WHERE id = p_user_id;
+
+        -- Create the order only after the wallet update succeeds.
+        INSERT INTO orders (
+            id,
+            user_id,
+            restaurant_id,
+            total_amount,
+            status
+        )
+        VALUES (
+            gen_random_uuid(),
+            p_user_id,
+            p_restaurant_id,
+            p_total_amount,
+            'PREPARING'
+        );
+
+    EXCEPTION
+        WHEN check_violation THEN
+            GET STACKED DIAGNOSTICS
+                constraint_name = CONSTRAINT_NAME;
+
+            IF constraint_name = 'chk_wallet_balance' THEN
+                rollback_required := TRUE;
+            ELSE
+                RAISE;
+            END IF;
+    END;
+
+    -- PostgreSQL does not allow COMMIT/ROLLBACK inside the
+    -- EXCEPTION block above, so rollback is performed here.
+    IF rollback_required THEN
+        ROLLBACK;
         RAISE EXCEPTION 'Insufficient wallet balance';
     END IF;
 
-    -- Deduct the order amount.
-    UPDATE users
-    SET wallet_balance = wallet_balance - p_total_amount
-    WHERE id = p_user_id;
-
-    -- Create the order.
-    INSERT INTO orders (
-        id,
-        user_id,
-        restaurant_id,
-        total_amount,
-        status
-    )
-    VALUES (
-        gen_random_uuid(),
-        p_user_id,
-        p_restaurant_id,
-        p_total_amount,
-        'PREPARING'
-    );
+    -- Commit successful checkout.
+    COMMIT;
 END;
 $$;

@@ -5,9 +5,9 @@ DECLARE
     amount_changed DECIMAL(10,2);
     action VARCHAR(10);
 BEGIN
-    amount_changed := NEW.wallet_balance - OLD.wallet_balance;
+    amount_changed := ABS(NEW.wallet_balance - OLD.wallet_balance);
 
-    IF amount_changed < 0 THEN
+    IF NEW.wallet_balance < OLD.wallet_balance THEN
         action := 'DEBIT';
     ELSE
         action := 'CREDIT';
