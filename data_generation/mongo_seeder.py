@@ -2,7 +2,11 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta, timezone
 import random
 
-client = MongoClient("mongodb://127.0.0.1:27017/")
+import os
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017/")
+client = MongoClient(MONGO_URI)
+
 client.admin.command("ping")
 print("Connected to MongoDB")
 
@@ -74,7 +78,7 @@ tags = [
 
 reviews_batch = []
 
-for _ in range(10000):
+for _ in range(50000):
     reviews_batch.append({
         "restaurant_id": random.randint(1, 100),
         "user_id": random.randint(1, 10000),
@@ -94,6 +98,19 @@ driver_active_status = {
 }
 
 batch = []
+
+batch.append({
+    "driver_id": 1,
+    "active": True,
+    "location": {
+        "type": "Point",
+        "coordinates": [78.4075, 17.4485]
+    },
+    "created_at": now
+})
+
+
+
 total_pings = 500500
 
 for i in range(total_pings):

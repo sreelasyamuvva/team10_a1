@@ -15,7 +15,7 @@ random.seed(42)
 DB_NAME = os.getenv("DB_NAME", "bitestream")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
 NUM_USERS = 10_000
@@ -90,18 +90,19 @@ ACTION_TYPES = [
 # Database connection
 
 def get_connection():
-    if not DB_PASSWORD:
-        raise RuntimeError(
-            "DB_PASSWORD environment variable is not set."
-        )
+    connection_params = {
+        "dbname": DB_NAME,
+        "user": DB_USER,
+        "port": DB_PORT,
+    }
 
-    return psycopg2.connect(
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        host=DB_HOST,
-        port=DB_PORT,
-    )
+    if DB_PASSWORD:
+        connection_params["password"] = DB_PASSWORD
+
+    if DB_HOST:
+        connection_params["host"] = DB_HOST
+
+    return psycopg2.connect(**connection_params)
 
 # Generating users
 
