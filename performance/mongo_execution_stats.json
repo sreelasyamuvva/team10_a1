@@ -1,0 +1,438 @@
+{
+  "workflow3_geonear": {
+    "collection": "DriverPings",
+    "operation": "$geoNear",
+    "raw_explain_output": {
+      "explainVersion": "1",
+      "stages": [
+        {
+          "$geoNearCursor": {
+            "queryPlanner": {
+              "namespace": "BiteStream.DriverPings",
+              "parsedQuery": {
+                "$and": [
+                  {
+                    "active": {
+                      "$eq": true
+                    }
+                  },
+                  {
+                    "location": {
+                      "$nearSphere": {
+                        "type": "Point",
+                        "coordinates": [
+                          78.4071,
+                          17.4483
+                        ]
+                      },
+                      "$maxDistance": 5000
+                    }
+                  }
+                ]
+              },
+              "winningPlan": {
+                "isCached": false,
+                "stage": "FETCH",
+                "filter": {
+                  "active": {
+                    "$eq": true
+                  }
+                },
+                "nss": "BiteStream.DriverPings",
+                "inputStage": {
+                  "stage": "GEO_NEAR_2DSPHERE",
+                  "nss": "BiteStream.DriverPings",
+                  "keyPattern": {
+                    "location": "2dsphere"
+                  },
+                  "indexName": "location_2dsphere",
+                  "indexVersion": 2
+                }
+              }
+            },
+            "executionStats": {
+              "executionSuccess": true,
+              "nReturned": 32,
+              "executionTimeMillis": 6,
+              "totalKeysExamined": 113,
+              "totalDocsExamined": 137,
+              "executionStages": {
+                "isCached": false,
+                "stage": "FETCH",
+                "filter": {
+                  "active": {
+                    "$eq": true
+                  }
+                },
+                "nReturned": 32,
+                "docsExamined": 48,
+                "alreadyHasObj": 48,
+                "nss": "BiteStream.DriverPings",
+                "inputStage": {
+                  "stage": "GEO_NEAR_2DSPHERE",
+                  "nReturned": 48,
+                  "keyPattern": {
+                    "location": "2dsphere"
+                  },
+                  "indexName": "location_2dsphere",
+                  "searchIntervals": [
+                    {
+                      "minDistance": 0,
+                      "maxDistance": 106.51029047956722,
+                      "maxInclusive": false,
+                      "nBuffered": 89,
+                      "nReturned": 48
+                    }
+                  ],
+                  "usedDisk": false,
+                  "inputStage": {
+                    "stage": "FETCH",
+                    "nReturned": 89,
+                    "docsExamined": 89,
+                    "alreadyHasObj": 0,
+                    "inputStage": {
+                      "stage": "IXSCAN",
+                      "nReturned": 89,
+                      "keyPattern": {
+                        "location": "2dsphere"
+                      },
+                      "indexName": "location_2dsphere",
+                      "isMultiKey": false,
+                      "isUnique": false,
+                      "isSparse": false,
+                      "isPartial": false,
+                      "indexVersion": 2,
+                      "direction": "forward",
+                      "keysExamined": 113,
+                      "seeks": 25,
+                      "dupsTested": 0,
+                      "dupsDropped": 0,
+                      "peakTrackedMemBytes": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "nReturned": 1,
+          "executionTimeMillisEstimate": 4
+        },
+        {
+          "$limit": 1,
+          "nReturned": 1,
+          "executionTimeMillisEstimate": 4
+        }
+      ],
+      "serverInfo": {
+        "host": "sanjays-MacBook-Air.local",
+        "port": 27017,
+        "version": "8.3.7"
+      },
+      "command": {
+        "aggregate": "DriverPings",
+        "pipeline": [
+          {
+            "$geoNear": {
+              "near": {
+                "type": "Point",
+                "coordinates": [
+                  78.4071,
+                  17.4483
+                ]
+              },
+              "distanceField": "distance",
+              "maxDistance": 5000,
+              "spherical": true,
+              "query": {
+                "active": true
+              }
+            }
+          },
+          {
+            "$limit": 1
+          }
+        ],
+        "cursor": {},
+        "$db": "BiteStream"
+      },
+      "ok": 1
+    }
+  },
+  "workflow4_facet": {
+    "collection": "Reviews",
+    "operation": "$facet",
+    "raw_explain_output": {
+      "explainVersion": "1",
+      "stages": [
+        {
+          "$cursor": {
+            "queryPlanner": {
+              "namespace": "BiteStream.Reviews",
+              "parsedQuery": {},
+              "winningPlan": {
+                "isCached": false,
+                "stage": "PROJECTION_SIMPLE",
+                "transformBy": {
+                  "rating": true,
+                  "sentiment_tags": true,
+                  "_id": false
+                },
+                "inputStage": {
+                  "stage": "FETCH",
+                  "nss": "BiteStream.Reviews",
+                  "inputStage": {
+                    "stage": "IXSCAN",
+                    "nss": "BiteStream.Reviews",
+                    "keyPattern": {
+                      "rating": 1,
+                      "sentiment_tags": 1
+                    },
+                    "indexName": "rating_1_sentiment_tags_1",
+                    "isMultiKey": true,
+                    "multiKeyPaths": {
+                      "rating": [],
+                      "sentiment_tags": [
+                        "sentiment_tags"
+                      ]
+                    },
+                    "isUnique": false,
+                    "isSparse": false,
+                    "isPartial": false,
+                    "indexVersion": 2,
+                    "direction": "forward",
+                    "indexBounds": {
+                      "rating": [
+                        "[MinKey, MaxKey]"
+                      ],
+                      "sentiment_tags": [
+                        "[MinKey, MaxKey]"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "executionStats": {
+              "executionSuccess": true,
+              "nReturned": 10000,
+              "executionTimeMillis": 43,
+              "totalKeysExamined": 19947,
+              "totalDocsExamined": 10000,
+              "executionStages": {
+                "isCached": false,
+                "stage": "PROJECTION_SIMPLE",
+                "nReturned": 10000,
+                "executionTimeMillisEstimate": 6,
+                "works": 19948,
+                "advanced": 10000,
+                "needTime": 9947,
+                "isEOF": 1,
+                "transformBy": {
+                  "rating": true,
+                  "sentiment_tags": true,
+                  "_id": false
+                },
+                "inputStage": {
+                  "stage": "FETCH",
+                  "nReturned": 10000,
+                  "docsExamined": 10000,
+                  "alreadyHasObj": 0,
+                  "nss": "BiteStream.Reviews",
+                  "inputStage": {
+                    "stage": "IXSCAN",
+                    "nReturned": 10000,
+                    "keyPattern": {
+                      "rating": 1,
+                      "sentiment_tags": 1
+                    },
+                    "indexName": "rating_1_sentiment_tags_1",
+                    "isMultiKey": true,
+                    "keysExamined": 19947,
+                    "seeks": 1,
+                    "dupsTested": 19947,
+                    "dupsDropped": 9947,
+                    "peakTrackedMemBytes": 96382
+                  }
+                }
+              }
+            }
+          },
+          "nReturned": 10000,
+          "executionTimeMillisEstimate": 24
+        },
+        {
+          "$facet": {
+            "rating_distribution": [
+              {
+                "$internalFacetTeeConsumer": {},
+                "nReturned": 10000,
+                "executionTimeMillisEstimate": 24
+              },
+              {
+                "$group": {
+                  "_id": "$rating",
+                  "count": {
+                    "$sum": {
+                      "$const": 1
+                    }
+                  }
+                },
+                "nReturned": 5,
+                "executionTimeMillisEstimate": 24,
+                "usedDisk": false
+              },
+              {
+                "$sort": {
+                  "sortKey": {
+                    "_id": 1
+                  }
+                },
+                "nReturned": 5,
+                "executionTimeMillisEstimate": 42,
+                "usedDisk": false
+              }
+            ],
+            "most_frequent_tags": [
+              {
+                "$internalFacetTeeConsumer": {},
+                "nReturned": 10000,
+                "executionTimeMillisEstimate": 0
+              },
+              {
+                "$unwind": {
+                  "path": "$sentiment_tags"
+                },
+                "nReturned": 19947,
+                "executionTimeMillisEstimate": 0
+              },
+              {
+                "$group": {
+                  "_id": "$sentiment_tags",
+                  "count": {
+                    "$sum": {
+                      "$const": 1
+                    }
+                  }
+                },
+                "nReturned": 8,
+                "executionTimeMillisEstimate": 0,
+                "usedDisk": false
+              },
+              {
+                "$sort": {
+                  "sortKey": {
+                    "count": -1,
+                    "_id": 1
+                  },
+                  "limit": 10
+                },
+                "nReturned": 8,
+                "executionTimeMillisEstimate": 0,
+                "usedDisk": false
+              }
+            ],
+            "overall_average_rating": [
+              {
+                "$internalFacetTeeConsumer": {},
+                "nReturned": 10000,
+                "executionTimeMillisEstimate": 0
+              },
+              {
+                "$group": {
+                  "_id": {
+                    "$const": null
+                  },
+                  "average_rating": {
+                    "$avg": "$rating"
+                  }
+                },
+                "nReturned": 1,
+                "executionTimeMillisEstimate": 0,
+                "usedDisk": false
+              }
+            ]
+          },
+          "nReturned": 1,
+          "executionTimeMillisEstimate": 42
+        }
+      ],
+      "peakTrackedMemBytes": 96382,
+      "serverInfo": {
+        "host": "sanjays-MacBook-Air.local",
+        "port": 27017,
+        "version": "8.3.7"
+      },
+      "command": {
+        "aggregate": "Reviews",
+        "pipeline": [
+          {
+            "$sort": {
+              "rating": 1
+            }
+          },
+          {
+            "$project": {
+              "_id": 0,
+              "rating": 1,
+              "sentiment_tags": 1
+            }
+          },
+          {
+            "$facet": {
+              "rating_distribution": [
+                {
+                  "$group": {
+                    "_id": "$rating",
+                    "count": {
+                      "$sum": 1
+                    }
+                  }
+                },
+                {
+                  "$sort": {
+                    "_id": 1
+                  }
+                }
+              ],
+              "most_frequent_tags": [
+                {
+                  "$unwind": "$sentiment_tags"
+                },
+                {
+                  "$group": {
+                    "_id": "$sentiment_tags",
+                    "count": {
+                      "$sum": 1
+                    }
+                  }
+                },
+                {
+                  "$sort": {
+                    "count": -1,
+                    "_id": 1
+                  }
+                },
+                {
+                  "$limit": 10
+                }
+              ],
+              "overall_average_rating": [
+                {
+                  "$group": {
+                    "_id": null,
+                    "average_rating": {
+                      "$avg": "$rating"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "cursor": {},
+        "$db": "BiteStream"
+      },
+      "ok": 1
+    }
+  }
+}
