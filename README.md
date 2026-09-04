@@ -1,132 +1,439 @@
-# BiteStream – Food Delivery & Real-Time Logistics
+ BiteStream — Food Delivery & Real-Time Logistics
 
-## CS6.302 – Software System Development / Database Design
+A database implementation for the BiteStream food-delivery and real-time logistics use case, using **PostgreSQL** for transactional/relational workloads and **MongoDB** for flexible reviews, menus, and geospatial driver telemetry.
 
-### PostgreSQL Foundation
+## Repository
 
-The PostgreSQL foundation for the ByteStream food-delivery system has been implemented.
+GitHub: https://github.com/sreelasyamuvva/team10_a1
 
-### Implemented
+**Submission commit hash:** `358ad5`
 
-- PostgreSQL database: `bitestream`
-- Relational schema with 4 tables:
-  - `users`
-  - `restaurants`
-  - `orders`
-  - `wallet_audit_logs`
-- Primary and foreign key constraints
-- Wallet balance and order-status constraints
-- Relational ERD
-- Python PostgreSQL data-generation script using `psycopg2`
+> The hash above is the latest repository commit known before the final README update. After the README is committed, use the resulting commit hash as the final submission hash required by the submission portal. A commit cannot contain its own final hash because changing the README changes the commit hash.
 
-### PostgreSQL Generated Dataset
-A Python data-generation script has been implemented to populate the PostgreSQL database with a large dataset.
+---
 
-The script is located at:
+## 1. Project Structure
 
 ```text
-data_generation/postgres_seeder.py
+.
+├── data_generation/
+│   ├── mongo_seeder.py
+│   ├── postgres_seeder.py
+│   └── requirements.txt
+├── docs/
+│   ├── mongo_schema_map.json
+│   └── relational_erd.png
+├── mongo/
+│   ├── 01_collections_and_indexes.js
+│   ├── 02_workflow3_geonear.js
+│   └── 03_workflow4_facet.js
+├── performance/
+│   ├── postgres_explain_analyzes.txt
+│   ├── 1postgres_explain_analyzes.txt
+│   └── mongo_execution_stats.json
+└── sql/
+    ├── 01_schema_ddl.sql
+    ├── 02_indexes.sql
+    ├── 03_triggers_and_audit.sql
+    ├── 04_stored_procedures.sql
+    ├── 05_materialized_views.sql
+    └── 06_window_analytics.sql
 ```
 
-The script uses `psycopg2` to connect Python to PostgreSQL.
+> `performance/1postgres_explain_analyzes.txt` is an older duplicate/legacy analysis file. The intended submission file is `performance/postgres_explain_analyzes.txt`; remove the duplicate before the final submission if it is still present.
 
-It generates reproducible random data using:
+---
 
-```python
-random.seed(42)
-```
+# 2. PostgreSQL
 
-| Table | Records |
-|---|---:|
-| Users | 10,000 |
-| Restaurants | 500 |
-| Orders | 50,000 |
-| Wallet Audit Logs | 120,000 |
+## 2.1 Schema
 
-### Relational ERD
+The PostgreSQL database contains the required relational entities:
 
-The relational entity-relationship diagram is available at:
+| Table | Purpose |
+|---|---|
+| `users` | User details and wallet balance |
+| `restaurants` | Restaurant information and location |
+| `orders` | Order details, amount, status, and timestamps |
+| `wallet_audit_logs` | Audit records for wallet-balance changes |
+
+Important constraints include a **non-negative wallet balance** and controlled order statuses.
+
+The relational ER diagram is available at:
 
 ```text
 docs/relational_erd.png
 ```
-The ERD represents the four PostgreSQL tables and their relationships.
 
+Schema definition:
 
-# Assumptions
-The following assumptions were made: 
-1. UUID values are used for primary and foreign-key identifiers.
-2. The PostgreSQL database is named `bitestream`.
-3. The generated order data spans approximately 30 days to support later time-based analytics.
-4. Order statuses are restricted to `PREPARING`,`DELIVERING`, and `DELIVERED`.
-5. Wallet audit actions are restricted to `DEBIT` and `CREDIT`.
-6. Random data generation uses a fixed seed for reproducibility.
-7. The PostgreSQL password is provided through an environment variable and is not stored in the repository.
+```text
+sql/01_schema_ddl.sql
+```
 
-## Workflow 2 – SQL Window Analytics
+## 2.2 Indexes
 
-Workflow 2 performs time-based revenue analytics on PostgreSQL order data.
+The assignment requires prevention of multiple simultaneously active orders for the same user. This is enforced with a **partial unique index**:
 
-### Objectives
+```sql
+CREATE UNIQUE INDEX idx_active_user_order
+ON orders (user_id)
+WHERE status IN ('PREPARING', 'DELIVERING');
+```
 
-- Calculate daily delivered-order revenue for each restaurant.
-- Calculate a 7-day moving average of daily revenue for each restaurant.
-- Rank restaurants using `DENSE_RANK()` based on their latest 7-day moving average.
+Additional supporting indexes are defined in:
 
-The SQL implementation is available at:
+```text
+sql/02_indexes.sql
+```
 
+## 2.3 Wallet Audit Trigger
+
+```text
+sql/03_triggers_and_audit.sql
+```
+
+The trigger records wallet-balance changes in `wallet_audit_logs`. The logged amount is non-negative, while the action is derived from the direction of the balance change:
+
+- balance decreases → `DEBIT`
+- balance increases → `CREDIT`
+
+The audit row also records the affected user, resulting balance, and timestamp.
+
+## 2.4 Workflow 1 — Atomic Checkout
+
+```text
+sql/04_stored_procedures.sql
+```
+
+Stored procedure:
+
+```text
+sp_execute_checkout(user_id, restaurant_id, total_amount)
+```
+
+The checkout workflow:
+
+1. Uses `REPEATABLE READ` isolation.
+2. Locks the user row with `FOR UPDATE`.
+3. Deducts the requested amount from the wallet.
+4. Lets the wallet `CHECK` constraint reject an insufficient balance.
+5. Inserts the order only after a successful wallet update.
+6. Commits a successful checkout.
+7. Rolls back the transaction when the wallet constraint is violated.
+
+Example:
+
+```sql
+CALL sp_execute_checkout(
+    '<user_uuid>',
+    '<restaurant_uuid>',
+    250.00
+);
+```
+
+Because the procedure contains transaction control, call it as a **top-level `CALL`**, not from inside an already-open explicit transaction block.
+
+## 2.5 Materialized View
+
+```text
+sql/05_materialized_views.sql
+```
+
+Materialized view:
+
+```text
+restaurant_completed_revenue
+```
+
+It stores restaurant-level completed-order revenue and completed-order counts.
+
+A unique index on `restaurant_id` supports concurrent refresh:
+
+```sql
+REFRESH MATERIALIZED VIEW CONCURRENTLY restaurant_completed_revenue;
+```
+
+A helper procedure is also provided:
+
+```text
+refresh_restaurant_completed_revenue()
+```
+
+## 2.6 Workflow 2 — SQL Window Analytics
+
+```text
 sql/06_window_analytics.sql
+```
 
-### Query Design
+The workflow computes restaurant-level daily revenue and window-based analytics, including:
 
-The workflow uses multiple CTEs:
+- a **7-day moving average** of revenue;
+- restaurant ranking using `DENSE_RANK()`;
+- a contiguous date/calendar range so missing order dates remain represented in the analysis.
 
-1. `daily_revenue` groups delivered orders by restaurant and calendar date.
-2. `restaurant_calendar` creates a continuous calendar for every restaurant.
-3. `daily_revenue_complete` fills missing revenue values with zero using `COALESCE()`.
-4. `moving_average` calculates the 7-day moving average using a window function.
-5. `latest_metrics` uses `ROW_NUMBER()` to select the latest date for each restaurant.
-6. `ranked_restaurants` uses `DENSE_RANK()` to rank restaurants by their latest 7-day moving average.
+---
 
-### Workflow 2 Output
+# 3. MongoDB
 
-The final result contains one row per restaurant:
+## 3.1 Collections
 
-- `restaurant_id`
-- `restaurant_name`
-- `order_date`
-- `daily_revenue`
-- `moving_average_7_day`
-- `revenue_rank`
+MongoDB database:
 
-### Performance Testing
+```text
+BiteStream
+```
 
-Workflow 2 was tested using:
+Required collections:
 
-`EXPLAIN (ANALYZE, BUFFERS)`
+| Collection | Purpose |
+|---|---|
+| `Menus` | Flexible menu/catalog documents |
+| `Reviews` | Ratings, comments, and sentiment tags |
+| `DriverPings` | Real-time GeoJSON driver telemetry |
 
-Dataset:
+Schema documentation:
 
-- Users: 10,000
-- Restaurants: 500
-- Orders: 50,000
-- Delivered Orders: 40,320
-- Wallet Audit Logs: 120,000
+```text
+docs/mongo_schema_map.json
+```
 
-Captured baseline execution time:
-
-`105.954 ms`
-
-The complete execution plan is stored in:
-
-`performance/1postgres_explain_analyzes.txt`
-
-The plan uses a sequential scan of `orders` for the delivered-order aggregation. This is reasonable because most orders in the current dataset are delivered.
-
-A temporary partial index was also tested, but PostgreSQL continued to choose a sequential scan and there was no meaningful performance improvement. The temporary index was removed.
-
-### Performance Reproduction
+## 3.2 Indexes and Collection Setup
 
 Run:
 
-`psql -U userguy -d bitestream -c "EXPLAIN (ANALYZE, BUFFERS) $(cat sql/06_window_analytics.sql)"`
+```bash
+mongosh BiteStream mongo/01_collections_and_indexes.js
+```
+
+The script creates:
+
+- `DriverPings.location` as a `2dsphere` index;
+- a TTL index on `DriverPings.created_at` with `expireAfterSeconds: 7200`;
+- the compound `Reviews` index on `rating` and `sentiment_tags`.
+
+## 3.3 Workflow 3 — Nearest Active Driver
+
+Run:
+
+```bash
+mongosh BiteStream mongo/02_workflow3_geonear.js
+```
+
+The workflow uses `$geoNear` to find the nearest **active driver within 5 km** of the target point:
+
+```text
+[78.4071, 17.4483]
+```
+
+The query is supported by the `location_2dsphere` index.
+
+## 3.4 Workflow 4 — Review Analytics with `$facet`
+
+Run:
+
+```bash
+mongosh BiteStream mongo/03_workflow4_facet.js
+```
+
+The workflow produces three results in one aggregation:
+
+1. **Rating distribution**
+2. **Most frequent sentiment tags**, using `$unwind`
+3. **Overall average rating**
+
+The pipeline begins with a projection of only the required review fields and then applies `$facet`. There is no unnecessary global sort before the facet; sorting is performed only inside the individual facet branches where ordering is required.
+
+---
+
+# 4. Data Generation / Stress Test
+
+The data generators are in `data_generation/`.
+
+Install dependencies:
+
+```bash
+cd data_generation
+python3 -m pip install -r requirements.txt
+```
+
+## 4.1 PostgreSQL Seeder
+
+Run:
+
+```bash
+python3 postgres_seeder.py
+```
+
+The seeder supports these environment variables:
+
+```text
+DB_NAME
+DB_USER
+DB_PASSWORD
+DB_HOST
+DB_PORT
+```
+
+Default database settings are suitable for a standard local PostgreSQL installation, subject to the machine's authentication configuration.
+
+Current generation targets:
+
+| Dataset | Rows/documents |
+|---|---:|
+| PostgreSQL `users` | 10,000 |
+| PostgreSQL `restaurants` | 500 |
+| PostgreSQL `orders` | 50,000 |
+| PostgreSQL `wallet_audit_logs` | 120,000 |
+| MongoDB `Reviews` | 50,000 |
+| MongoDB `DriverPings` | 500,500+ |
+
+The PostgreSQL dataset alone exceeds the required 100k-row scale because the audit-log workload contains 120,000 rows.
+
+The order generator also tracks users with active orders so that the partial unique active-order constraint is respected by generated data.
+
+## 4.2 MongoDB Seeder
+
+Run:
+
+```bash
+python3 mongo_seeder.py
+```
+
+The MongoDB connection string is controlled by:
+
+```text
+MONGO_URI
+```
+
+with the default:
+
+```text
+mongodb://127.0.0.1:27017/
+```
+
+The seeder clears the target collections before generating fresh data. It also inserts a guaranteed active driver near the Workflow 3 demonstration point so that the nearest-driver query has a known nearby candidate.
+
+---
+
+# 5. Performance Analysis
+
+## 5.1 PostgreSQL
+
+Raw PostgreSQL execution evidence is stored in:
+
+```text
+performance/postgres_explain_analyzes.txt
+```
+
+The analysis covers `EXPLAIN (ANALYZE, BUFFERS)` for the SQL workload and checks index usage, rows examined, and execution time.
+
+For index-usage verification, a comparison plan may be generated with:
+
+```sql
+SET enable_seqscan = OFF;
+EXPLAIN (ANALYZE, BUFFERS)
+...
+```
+
+Such a plan must be interpreted as **forced index usage**, not as proof that PostgreSQL's cost-based optimizer would naturally select that index when sequential scanning is cheaper.
+
+## 5.2 MongoDB
+
+Raw MongoDB execution evidence is stored in:
+
+```text
+performance/mongo_execution_stats.json
+```
+
+The evidence records:
+
+### Workflow 3
+
+The recorded plan uses:
+
+```text
+GEO_NEAR_2DSPHERE
+location_2dsphere
+```
+
+and records execution statistics such as keys examined, documents examined, and execution time.
+
+### Workflow 4
+
+The recorded plan contains:
+
+```text
+IXSCAN
+rating_1_sentiment_tags_1
+```
+
+and does not rely on a collection-level `COLLSCAN`.
+
+**Important:** the currently recorded MongoDB statistics were generated on a MongoDB 8.3.7 environment with the earlier 10,000-review dataset. The current seeder targets 50,000 reviews. The execution-statistics JSON should therefore be regenerated against the current dataset before making a claim that the recorded numbers represent the 50,000-review workload.
+
+Do not manually fabricate or edit execution-time, keys-examined, or documents-examined values.
+
+---
+
+# 6. Reproducibility
+
+## PostgreSQL
+
+Create/select the target database, then execute the SQL files in order:
+
+```bash
+psql -d bitestream -f sql/01_schema_ddl.sql
+psql -d bitestream -f sql/02_indexes.sql
+psql -d bitestream -f sql/03_triggers_and_audit.sql
+psql -d bitestream -f sql/04_stored_procedures.sql
+psql -d bitestream -f sql/05_materialized_views.sql
+psql -d bitestream -f sql/06_window_analytics.sql
+```
+
+Then populate the database:
+
+```bash
+cd data_generation
+python3 postgres_seeder.py
+```
+
+## MongoDB
+
+Start MongoDB and populate the collections:
+
+```bash
+cd data_generation
+python3 -m pip install -r requirements.txt
+python3 mongo_seeder.py
+```
+
+Create indexes and execute the workflows:
+
+```bash
+mongosh BiteStream mongo/01_collections_and_indexes.js
+mongosh BiteStream mongo/02_workflow3_geonear.js
+mongosh BiteStream mongo/03_workflow4_facet.js
+```
+
+---
+
+# 7. Files Relevant to Submission Requirements
+
+| Requirement | File |
+|---|---|
+| PostgreSQL schema | `sql/01_schema_ddl.sql` |
+| PostgreSQL indexes | `sql/02_indexes.sql` |
+| Wallet audit trigger | `sql/03_triggers_and_audit.sql` |
+| Atomic checkout | `sql/04_stored_procedures.sql` |
+| Materialized view + concurrent refresh | `sql/05_materialized_views.sql` |
+| Window analytics | `sql/06_window_analytics.sql` |
+| Mongo collections/indexes | `mongo/01_collections_and_indexes.js` |
+| Mongo `$geoNear` workflow | `mongo/02_workflow3_geonear.js` |
+| Mongo `$facet` workflow | `mongo/03_workflow4_facet.js` |
+| PostgreSQL performance | `performance/postgres_explain_analyzes.txt` |
+| MongoDB performance | `performance/mongo_execution_stats.json` |
+| PostgreSQL data generation | `data_generation/postgres_seeder.py` |
+| MongoDB data generation | `data_generation/mongo_seeder.py` |
+| Mongo schema mapping | `docs/mongo_schema_map.json` |
+| Relational ERD | `docs/relational_erd.png` |
