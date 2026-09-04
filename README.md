@@ -370,10 +370,6 @@ rating_1_sentiment_tags_1
 
 and does not rely on a collection-level `COLLSCAN`.
 
-**Important:** the currently recorded MongoDB statistics were generated on a MongoDB 8.3.7 environment with the earlier 10,000-review dataset. The current seeder targets 50,000 reviews. The execution-statistics JSON should therefore be regenerated against the current dataset before making a claim that the recorded numbers represent the 50,000-review workload.
-
-Do not manually fabricate or edit execution-time, keys-examined, or documents-examined values.
-
 ---
 
 # 6. Reproducibility
