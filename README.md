@@ -451,7 +451,55 @@ mongosh BiteStream mongo/03_workflow4_facet.js
 
 ---
 
-# 7. Files Relevant to Submission Requirements
+# 7. Assumptions
+
+## PostgreSQL
+
+The following assumptions were made during the PostgreSQL implementation:
+
+1. UUID values are used for primary-key and foreign-key identifiers.
+
+2. The PostgreSQL database is named `bitestream`.
+
+3. The generated order data spans approximately 30 days to support time-based analytics such as daily revenue and the 7-day moving average.
+
+4. Order statuses are restricted to `PREPARING`, `DELIVERING`, and `DELIVERED`.
+
+5. Wallet audit actions are restricted to `DEBIT` and `CREDIT`.
+
+6. Random data generation uses a fixed seed for reproducibility.
+
+7. The PostgreSQL password is provided through an environment variable and is not stored in the repository.
+
+8. Missing restaurant/date combinations are treated as zero revenue in the window-analysis workflow so that the 7-day moving average represents seven calendar days.
+
+9. MongoDB `DriverPings.location` values use GeoJSON Point coordinates in `[longitude, latitude]` order.
+
+10. Driver telemetry older than two hours is eligible for TTL deletion.
+
+11. The data-generation scripts are intended for reproducible local stress testing and are not production data loaders.
+
+12. Database credentials/configuration are supplied through environment variables and are not stored in the repository.
+
+## MongoDB
+
+The following assumptions were made during the MongoDB implementation:
+
+1. **Restaurant coordinates are hardcoded for Workflow 3.**
+   Restaurant latitude/longitude values are maintained in PostgreSQL, while driver telemetry is stored in MongoDB. Since a single MongoDB aggregation pipeline cannot directly join data from PostgreSQL, the Workflow 3 `$geoNear` query uses the fixed coordinate `[78.4071, 17.4483]` as a standalone demonstration point. In a full application, the service layer would retrieve the restaurant coordinates from PostgreSQL and pass them to MongoDB at query time.
+
+2. **Driver active status is assigned per driver rather than per ping.**
+   During data generation, each `driver_id` is assigned one active status, and all pings generated for that driver use the same status. This avoids representing the same driver as both active and inactive across simultaneously generated telemetry records.
+
+3. **Most frequent sentiment tags are limited to the top 10.**
+   The assignment asks for the most frequent tag strings without specifying a count. We therefore return the ten most frequent tags using `$sort` followed by `$limit: 10`.
+
+4. **The Workflow 4 index provides partial index support rather than full query coverage.**
+   The compound index `{rating: 1, sentiment_tags: 1}` supports the fields used by the `$facet` workflow. Because `sentiment_tags` is an array field, the index is multikey and does not provide full query coverage; MongoDB may still fetch the corresponding documents.
+
+---
+
+# 8. Files Relevant to Submission Requirements
 
 | Requirement | File |
 |---|---|
