@@ -1,4 +1,3 @@
-
 {
   "Menus": {
     "description": "Flexible restaurant menu catalog with nested categories, items, and customization add-ons",
@@ -60,7 +59,6 @@
       "_id_"
     ]
   },
-
   "Reviews": {
     "description": "Structured restaurant review documents with ratings, sentiment tags, and timestamps",
     "fields": {
@@ -91,10 +89,17 @@
       }
     },
     "indexes": [
-      "_id_"
+      "_id_",
+      {
+        "name": "rating_1_sentiment_tags_1",
+        "keys": {
+          "rating": 1,
+          "sentiment_tags": 1
+        },
+        "purpose": "Supports Workflow 4 ($facet): serves the pre-facet $sort on rating and the $project(rating, sentiment_tags), avoiding a COLLSCAN and a blocking in-memory sort. Note: sentiment_tags is an array field, making this a multikey index, so it does not produce a fully covered query."
+      }
     ]
   },
-
   "DriverPings": {
     "description": "Real-time driver geospatial telemetry logs in GeoJSON Point format",
     "fields": {
