@@ -1,0 +1,90 @@
+============================================================
+BiteStream - Workflow 2 PostgreSQL EXPLAIN ANALYZE
+============================================================
+
+Query: sql/06_window_analytics.sql
+Dataset: 50,000 orders, 10,000 users, 500 restaurants
+Delivered orders: 40,320
+
+EXPLAIN (ANALYZE, BUFFERS) output:
+
+                                                                                              QUERY PLAN                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=136101.37..136107.62 rows=2500 width=76) (actual time=93.326..93.344 rows=500.00 loops=1)
+   Sort Key: (dense_rank() OVER w1), latest_metrics.restaurant_name
+   Sort Method: quicksort  Memory: 63kB
+   Buffers: shared hit=2015
+   ->  WindowAgg  (cost=135916.54..135960.27 rows=2500 width=76) (actual time=93.031..93.225 rows=500.00 loops=1)
+         Window: w1 AS (ORDER BY latest_metrics.moving_average_7_day ROWS UNBOUNDED PRECEDING)
+         Storage: Memory  Maximum Storage: 17kB
+         Buffers: shared hit=2009
+         ->  Sort  (cost=135916.52..135922.77 rows=2500 width=68) (actual time=93.013..93.036 rows=500.00 loops=1)
+               Sort Key: latest_metrics.moving_average_7_day DESC
+               Sort Method: quicksort  Memory: 60kB
+               Buffers: shared hit=2009
+               ->  Subquery Scan on latest_metrics  (cost=74580.31..135775.42 rows=2500 width=68) (actual time=56.081..92.863 rows=500.00 loops=1)
+                     Filter: (latest_metrics.latest_row = 1)
+                     Buffers: shared hit=2006
+                     ->  WindowAgg  (cost=74580.31..129525.42 rows=500000 width=76) (actual time=56.040..92.771 rows=500.00 loops=1)
+                           Window: w1 AS (PARTITION BY moving_average.restaurant_id ORDER BY moving_average.order_date ROWS UNBOUNDED PRECEDING)
+                           Run Condition: (row_number() OVER w1 <= 1)
+                           Storage: Memory  Maximum Storage: 17kB
+                           Buffers: shared hit=2006
+                           ->  Incremental Sort  (cost=74580.31..120775.42 rows=500000 width=68) (actual time=56.032..91.918 rows=15500.00 loops=1)
+                                 Sort Key: moving_average.restaurant_id, moving_average.order_date DESC
+                                 Presorted Key: moving_average.restaurant_id
+                                 Full-sort Groups: 250  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
+                                 Buffers: shared hit=2006
+                                 ->  Subquery Scan on moving_average  (cost=74580.26..98275.42 rows=500000 width=68) (actual time=55.821..87.175 rows=15500.00 loops=1)
+                                       Buffers: shared hit=2006
+                                       ->  WindowAgg  (cost=74580.26..98275.42 rows=500000 width=68) (actual time=55.818..86.147 rows=15500.00 loops=1)
+                                             Window: w1 AS (PARTITION BY r.id ORDER BY ((calendar_day.calendar_day)::date) ROWS BETWEEN '6'::bigint PRECEDING AND CURRENT ROW)
+                                             Storage: Memory  Maximum Storage: 17kB
+                                             Buffers: shared hit=2006
+                                             InitPlan 1
+                                               ->  Aggregate  (cost=1417.00..1417.01 rows=1 width=4) (actual time=7.830..7.831 rows=1.00 loops=1)
+                                                     Buffers: shared hit=667
+                                                     ->  Seq Scan on orders  (cost=0.00..1167.00 rows=50000 width=8) (actual time=0.014..1.986 rows=50000.00 loops=1)
+                                                           Buffers: shared hit=667
+                                             InitPlan 2
+                                               ->  Aggregate  (cost=1417.00..1417.01 rows=1 width=4) (actual time=7.199..7.200 rows=1.00 loops=1)
+                                                     Buffers: shared hit=667
+                                                     ->  Seq Scan on orders orders_1  (cost=0.00..1167.00 rows=50000 width=8) (actual time=0.003..1.794 rows=50000.00 loops=1)
+                                                           Buffers: shared hit=667
+                                             ->  Merge Left Join  (cost=71746.20..81691.40 rows=500000 width=68) (actual time=41.331..58.355 rows=15500.00 loops=1)
+                                                   Merge Cond: ((r.id = o.restaurant_id) AND (((calendar_day.calendar_day)::date) = ((o.created_at)::date)))
+                                                   Buffers: shared hit=2006
+                                                   ->  Sort  (cost=67274.68..68524.68 rows=500000 width=40) (actual time=23.239..24.402 rows=15500.00 loops=1)
+                                                         Sort Key: r.id, ((calendar_day.calendar_day)::date)
+                                                         Sort Method: quicksort  Memory: 1400kB
+                                                         Buffers: shared hit=1339
+                                                         ->  Nested Loop  (cost=0.01..6271.26 rows=500000 width=40) (actual time=15.068..17.418 rows=15500.00 loops=1)
+                                                               Buffers: shared hit=1339
+                                                               ->  Function Scan on generate_series calendar_day  (cost=0.01..10.01 rows=1000 width=8) (actual time=15.054..15.056 rows=31.00 loops=1)
+                                                                     Buffers: shared hit=1334
+                                                               ->  Materialize  (cost=0.00..12.50 rows=500 width=32) (actual time=0.000..0.017 rows=500.00 loops=31)
+                                                                     Storage: Memory  Maximum Storage: 45kB
+                                                                     Buffers: shared hit=5
+                                                                     ->  Seq Scan on restaurants r  (cost=0.00..10.00 rows=500 width=32) (actual time=0.009..0.039 rows=500.00 loops=1)
+                                                                           Buffers: shared hit=5
+                                                   ->  GroupAggregate  (cost=4471.52..5472.73 rows=39911 width=52) (actual time=18.072..30.043 rows=14220.00 loops=1)
+                                                         Group Key: o.restaurant_id, ((o.created_at)::date)
+                                                         Buffers: shared hit=667
+                                                         ->  Sort  (cost=4471.52..4572.15 rows=40255 width=26) (actual time=18.044..21.056 rows=40320.00 loops=1)
+                                                               Sort Key: o.restaurant_id, ((o.created_at)::date)
+                                                               Sort Method: quicksort  Memory: 3256kB
+                                                               Buffers: shared hit=667
+                                                               ->  Seq Scan on orders o  (cost=0.00..1392.64 rows=40255 width=26) (actual time=0.009..7.181 rows=40320.00 loops=1)
+                                                                     Filter: ((status)::text = 'DELIVERED'::text)
+                                                                     Rows Removed by Filter: 9680
+                                                                     Buffers: shared hit=667
+ Planning:
+   Buffers: shared hit=293
+ Planning Time: 0.920 ms
+ JIT:
+   Functions: 49
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 1.514 ms (Deform 0.616 ms), Inlining 0.000 ms, Optimization 0.504 ms, Emission 14.074 ms, Total 16.092 ms
+ Execution Time: 105.954 ms
+(76 rows)
+

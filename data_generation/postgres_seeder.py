@@ -174,6 +174,9 @@ def generate_orders(user_ids, restaurant_ids):
     now = datetime.now(timezone.utc)
     start_time = now - timedelta(days=30)
 
+    # Track users who already have an active order.
+    active_users = set()
+
     for _ in range(NUM_ORDERS):
         order_id = uuid.uuid4()
 
@@ -186,6 +189,14 @@ def generate_orders(user_ids, restaurant_ids):
         )
 
         status = random.choice(ORDER_STATUSES)
+
+        # The database allows only one active order
+        # (PREPARING or DELIVERING) per user.
+        if status in ("PREPARING", "DELIVERING"):
+            if user_id in active_users:
+                status = "DELIVERED"
+            else:
+                active_users.add(user_id)
 
         created_at = start_time + timedelta(
             seconds=random.randint(
@@ -206,7 +217,6 @@ def generate_orders(user_ids, restaurant_ids):
         )
 
     return orders
-
 # Generating wallet audit logs
 
 def generate_audit_logs(user_ids):
